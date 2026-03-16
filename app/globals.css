@@ -66,7 +66,8 @@
   /* Ink */
   --ink-1: #080D1A;
   --ink-2: #4A5568;
-  --ink-3: #8896AB;
+  /* #5E6E82 — darkened from #8896AB for WCAG AA contrast (≥4.5:1 vs white) */
+  --ink-3: #5E6E82;
 
   /* Surface */
   --surface-0:    #F4F6FA;
@@ -89,6 +90,24 @@
   --ring-accent:   0 0 0 3px rgba(79, 91, 213, 0.22);
   --ring-danger:   0 0 0 3px rgba(229, 52, 61, 0.22);
   --ring-success:  0 0 0 3px rgba(0, 179, 125, 0.22);
+
+  /* ── White-label theme tokens (--cv-*) ─────────────────────────────
+     Defaults match the Clarity preset.  ThemeProvider overrides these
+     at runtime via CSS custom property injection on a wrapper element.
+  */
+  --cv-font:              'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --cv-heading-weight:    700;
+  --cv-heading-ls:        -0.2px;
+  --cv-btn-weight:        600;
+  --cv-btn-ls:            -0.1px;
+  --cv-btn-transform:     none;
+  --cv-label-ls:          0.5px;
+  --cv-label-transform:   uppercase;
+  --cv-card-radius:       44px;
+  --cv-btn-radius:        12px;
+  --cv-progress-height:   3px;
+  --cv-progress-active:   var(--accent);
+  --cv-progress-track:    var(--border-1);
 
   /* Spacing */
   --space-1:  4px;
@@ -116,7 +135,7 @@ html {
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--cv-font, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
   font-size: 15px;
   line-height: 1.6;
   color: var(--ink-1);
@@ -188,9 +207,9 @@ input, select, textarea {
 .t-label {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--cv-label-ls, 0.5px);
   line-height: 1.40;
-  text-transform: uppercase;
+  text-transform: var(--cv-label-transform, uppercase);
 }
 
 .t-mono {
@@ -227,19 +246,142 @@ input, select, textarea {
 /* ─────────────────────────────────────────────────────────────────────────────
    ACCESSIBILITY
    ───────────────────────────────────────────────────────────────────────── */
+
+/* Keyboard focus ring — 2.5px accent outline with offset so it clears borders.
+   Visible on both light and dark surfaces; do NOT suppress in inline styles. */
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: 2.5px solid var(--accent);
+  outline-offset: 3px;
 }
 
 :focus:not(:focus-visible) {
   outline: none;
 }
 
+/* Screen-reader-only utility — hides visually but remains accessible to AT */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Framer Motion handles prefers-reduced-motion via MotionConfig reducedMotion="user".
+   This CSS rule covers any remaining CSS transitions/animations. */
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TOUCH & INTERACTION
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Eliminate the 300ms tap delay on all interactive elements */
+button, a, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+}
+
+/* Prevent pull-to-refresh and scroll chaining on the root */
+body {
+  overscroll-behavior: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SCREEN LAYOUT PATTERNS
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Scrollable content region inside a screen (flex child) */
+.screen-scroll {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  /* Hide scrollbar on mobile (content still scrollable) */
+  scrollbar-width: none;
+}
+.screen-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Sticky bottom footer — safe area aware */
+.screen-footer {
+  flex-shrink: 0;
+  padding: 10px 24px;
+  /* Safe area on iPhone X+ home indicator */
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  background: var(--surface-1);
+}
+
+/* Lighter footer variant for camera screens (no top separator) */
+.screen-footer--camera {
+  flex-shrink: 0;
+  padding: 8px 24px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   VERIFY SHELL — mobile base + desktop card
+   ───────────────────────────────────────────────────────────────────────── */
+
+.verify-shell-outer {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--surface-0);
+}
+
+.verify-card {
+  width: 100%;
+  max-width: 430px;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+}
+
+/* ── Desktop: centered phone-preview card ── */
+@media (min-width: 500px) {
+  .verify-shell-outer {
+    justify-content: center;
+    min-height: 100dvh;
+    padding: 20px;
+    /* Subtle branded background */
+    background:
+      radial-gradient(ellipse at 22% 28%, rgba(79, 91, 213, 0.10) 0%, transparent 52%),
+      radial-gradient(ellipse at 80% 75%, rgba(79, 91, 213, 0.07) 0%, transparent 46%),
+      radial-gradient(ellipse at 62% 12%, rgba(79, 91, 213, 0.05) 0%, transparent 38%),
+      var(--surface-0);
+  }
+
+  .verify-card {
+    min-height: unset;
+    /* Bounded height — fills comfortably without being too tall */
+    height: min(880px, calc(100dvh - 40px));
+    border-radius: var(--cv-card-radius, 44px);
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(8, 13, 26, 0.07),
+      0 2px 4px rgba(8, 13, 26, 0.04),
+      0 16px 48px rgba(8, 13, 26, 0.13),
+      0 40px 80px rgba(8, 13, 26, 0.09),
+      0 64px 120px rgba(79, 91, 213, 0.07);
+  }
+
+  /* On desktop, screen footers don't need the safe-area bottom override */
+  .screen-footer {
+    padding-bottom: 16px;
+  }
+  .screen-footer--camera {
+    padding-bottom: 10px;
   }
 }

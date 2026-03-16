@@ -1,37 +1,70 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { buildFlow, getProgress, PROGRESS_EXCLUDED } from '@/lib/flow'
-import type { DocType, ErrorType, FlowScreenId, FlowState } from '@/lib/types'
+import { evaluateFlow, detectDeviceType } from '@/lib/flowEngine'
+import { FLOW_RULES, type DemoScenario } from '@/lib/flowRules'
+import { deriveRiskLevel } from '@/lib/riskData'
+import { getProgress, getStepInfo } from '@/lib/flow'
+import type {
+  DocType,
+  ErrorType,
+  FlowContext,
+  FlowResolution,
+  FlowScreenId,
+  FlowState,
+  RiskLevel,
+  StepInfo,
+} from '@/lib/types'
 
 interface UseVerifyFlowResult {
   state: FlowState
   currentScreen: FlowScreenId
+  resolution: FlowResolution
   progress: number
+  stepInfo: StepInfo | null
   showProgress: boolean
   showBack: boolean
-  // Navigation
   next: () => void
   back: () => void
   retry: (error: ErrorType) => void
   resolveRetry: () => void
-  selectDoc: (docType: DocType) => void
+  /** Navigate back to the document-selection screen (used when wrong_doc is retried) */
+  goToDocSelect: () => void
+  selectDoc: (docType: DocType, country: string) => void
+  applyScenario: (scenario: DemoScenario) => void
 }
 
+/** Builds a FlowContext from parts, deriving riskLevel if not provided */
+function buildContext(
+  docType: DocType,
+  country: string,
+  riskOverride?: RiskLevel,
+): FlowContext {
+  return {
+    docType,
+    country,
+    riskLevel: riskOverride ?? deriveRiskLevel(country),
+    deviceType: detectDeviceType(),
+  }
+}
+
+/** The starting context — shown before the user selects a document */
+const DEFAULT_CTX = buildContext('passport', 'United Kingdom')
+const DEFAULT_RESOLUTION = evaluateFlow(DEFAULT_CTX, FLOW_RULES)
+
 const INITIAL_STATE: FlowState = {
-  docType: 'passport',
-  screens: buildFlow({ docType: 'passport' }),
+  docType: DEFAULT_CTX.docType,
+  country: DEFAULT_CTX.country,
+  riskLevel: DEFAULT_CTX.riskLevel,
+  screens: DEFAULT_RESOLUTION.screens,
   screenIndex: 0,
   retryError: null,
   direction: 1,
 }
 
-/**
- * Core flow state machine for the verification journey.
- * All navigation logic lives here; screens only call the provided callbacks.
- */
 export function useVerifyFlow(): UseVerifyFlowResult {
   const [state, setState] = useState<FlowState>(INITIAL_STATE)
+  const [resolution, setResolution] = useState<FlowResolution>(DEFAULT_RESOLUTION)
 
   const currentScreen: FlowScreenId = state.retryError
     ? 'retry'
@@ -63,15 +96,52 @@ export function useVerifyFlow(): UseVerifyFlowResult {
     setState((prev) => ({ ...prev, retryError: null }))
   }, [])
 
-  const selectDoc = useCallback((docType: DocType) => {
-    const newScreens = buildFlow({ docType })
+  /** Go back to the document-selection screen, clearing any retry error. */
+  const goToDocSelect = useCallback(() => {
+    setState((prev) => {
+      const idx = prev.screens.indexOf('country-doc')
+      return {
+        ...prev,
+        retryError: null,
+        direction: -1,
+        screenIndex: idx >= 0 ? idx : 0,
+      }
+    })
+  }, [])
+
+  /** Called from CountryDocSelectScreen when the user confirms their selection */
+  const selectDoc = useCallback((docType: DocType, country: string) => {
+    const ctx = buildContext(docType, country)
+    const res = evaluateFlow(ctx, FLOW_RULES)
+    setResolution(res)
     setState((prev) => ({
       ...prev,
       docType,
-      screens: newScreens,
+      country,
+      riskLevel: ctx.riskLevel,
+      screens: res.screens,
       direction: 1,
       screenIndex: prev.screenIndex + 1,
     }))
+  }, [])
+
+  /**
+   * Applies a demo scenario from the FlowInspector.
+   * Resets the flow to the welcome screen with the scenario's context pre-loaded.
+   */
+  const applyScenario = useCallback((scenario: DemoScenario) => {
+    const ctx = buildContext(scenario.docType, scenario.country)
+    const res = evaluateFlow(ctx, FLOW_RULES)
+    setResolution(res)
+    setState({
+      docType: scenario.docType,
+      country: scenario.country,
+      riskLevel: ctx.riskLevel,
+      screens: res.screens,
+      screenIndex: 0,
+      retryError: null,
+      direction: 1,
+    })
   }, [])
 
   const progress = useMemo(
@@ -79,7 +149,12 @@ export function useVerifyFlow(): UseVerifyFlowResult {
     [state.screens, currentScreen],
   )
 
-  const showProgress = !['welcome', 'success'].includes(currentScreen)
+  const stepInfo = useMemo(
+    () => getStepInfo(state.screens, currentScreen),
+    [state.screens, currentScreen],
+  )
+
+  const showProgress = !['welcome', 'success', 'retry'].includes(currentScreen)
 
   const showBack = useMemo(() => {
     if (state.retryError) return false
@@ -91,13 +166,17 @@ export function useVerifyFlow(): UseVerifyFlowResult {
   return {
     state,
     currentScreen,
+    resolution,
     progress,
+    stepInfo,
     showProgress,
     showBack,
     next,
     back,
     retry,
     resolveRetry,
+    goToDocSelect,
     selectDoc,
+    applyScenario,
   }
 }

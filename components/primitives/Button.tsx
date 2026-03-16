@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import type { ReactNode } from 'react'
+import type React from 'react'
 import type { ButtonVariant, ButtonSize } from '@/lib/types'
 import { Spinner } from './Spinner'
 
@@ -38,6 +39,7 @@ const VARIANTS: Record<ButtonVariant, VariantStyle> = {
       background: 'linear-gradient(160deg, var(--accent) 0%, var(--accent-hover) 100%)',
       color: 'var(--accent-on)',
       border: 'none',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18)',
     },
     disabled: { background: 'var(--border-1)', color: 'var(--ink-3)', border: 'none' },
   },
@@ -87,7 +89,9 @@ export function Button({
       onClick={isDisabled ? undefined : onClick}
       whileTap={isDisabled ? {} : { scale: 0.97 }}
       whileHover={
-        isDisabled ? {} : variant === 'primary' ? { boxShadow: 'var(--shadow-md)' } : {}
+        isDisabled ? {} : variant === 'primary'
+          ? { boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18), var(--shadow-md)' }
+          : {}
       }
       transition={{ duration: 0.12 }}
       aria-label={ariaLabel}
@@ -102,15 +106,16 @@ export function Button({
         height: HEIGHT[size],
         padding: `0 ${PADDING[size]}px`,
         fontSize: FONT_SIZE[size],
-        fontWeight: 600,
-        letterSpacing: '-0.1px',
+        fontWeight: 'var(--cv-btn-weight, 600)' as unknown as number,
+        letterSpacing: 'var(--cv-btn-ls, -0.1px)',
+        textTransform: 'var(--cv-btn-transform, none)' as React.CSSProperties['textTransform'],
         lineHeight: 1,
         whiteSpace: 'nowrap',
-        borderRadius: 'var(--radius-md)',
+        borderRadius: 'var(--cv-btn-radius, var(--radius-md))',
         userSelect: 'none',
         WebkitTapHighlightColor: 'transparent',
+        touchAction: 'manipulation',
         cursor: isDisabled ? 'not-allowed' : 'pointer',
-        outline: 'none',
         transition: 'box-shadow 150ms ease',
         flexShrink: 0,
         ...baseStyle,

@@ -1,48 +1,6 @@
-import type { DocType, FlowScreenId, FlowConfig } from './types'
+import type { FlowScreenId } from './types'
 
-/** Document types that require scanning both sides. */
-const TWO_SIDED_DOCS: DocType[] = ['drivers-license', 'national-id', 'residence-permit']
-
-/**
- * Builds the ordered list of screen IDs for a given verification configuration.
- *
- * Flow A (passport):       welcome → country-doc → doc-guidance → doc-capture-front
- *                          → selfie-guidance → selfie-capture → processing → success
- *
- * Flow B (two-sided doc):  same as A, but doc-capture-back inserted after front
- *
- * Flow C (liveness):       same as B, but liveness inserted before processing
- */
-export function buildFlow({
-  docType = 'passport',
-  requireLiveness = false,
-}: FlowConfig = {}): FlowScreenId[] {
-  const screens: FlowScreenId[] = [
-    'welcome',
-    'country-doc',
-    'doc-guidance',
-    'doc-capture-front',
-  ]
-
-  if (TWO_SIDED_DOCS.includes(docType)) {
-    screens.push('doc-capture-back')
-  }
-
-  screens.push('selfie-guidance', 'selfie-capture')
-
-  if (requireLiveness) {
-    screens.push('liveness')
-  }
-
-  screens.push('processing', 'success')
-
-  return screens
-}
-
-/**
- * Screens that are excluded from the progress bar count.
- * Instructional and utility screens don't count as "steps".
- */
+/** Screens omitted from the step counter and progress bar. */
 export const PROGRESS_EXCLUDED: FlowScreenId[] = [
   'welcome',
   'doc-guidance',
@@ -52,31 +10,50 @@ export const PROGRESS_EXCLUDED: FlowScreenId[] = [
   'retry',
 ]
 
-/**
- * Returns a 0–1 progress value for the current screen within the flow.
- * Returns 1 for terminal screens (processing, success).
- */
-export function getProgress(screens: FlowScreenId[], currentScreen: FlowScreenId): number {
-  if (currentScreen === 'retry') return -1
-  if (['processing', 'success'].includes(currentScreen)) return 1
-
+/** 0–1 progress value. Returns –1 for retry (no progress shown). */
+export function getProgress(screens: FlowScreenId[], current: FlowScreenId): number {
+  if (current === 'retry') return -1
+  if (['processing', 'success'].includes(current)) return 1
   const counted = screens.filter((s) => !PROGRESS_EXCLUDED.includes(s))
-  const idx = counted.indexOf(currentScreen)
-  if (idx < 0) return 0
-  return (idx + 1) / counted.length
+  const idx = counted.indexOf(current)
+  if (idx >= 0) return (idx + 1) / counted.length
+
+  // Screen is excluded from counting (e.g. doc-guidance, selfie-guidance).
+  // Return the progress of the last counted step that appears before it so
+  // the progress bar doesn't snap back to 0 on intermediate screens.
+  const screenIdx = screens.indexOf(current)
+  if (screenIdx <= 0) return 0
+  const completedCount = counted.filter((s) => screens.indexOf(s) < screenIdx).length
+  return completedCount / counted.length
 }
 
-/**
- * Human-readable label for each screen (used in aria-label, debugging).
- */
+/** Step number (1-based) and total, for "Step 2 of 4" display. */
+export function getStepInfo(
+  screens: FlowScreenId[],
+  current: FlowScreenId,
+): { step: number; total: number; label: string } | null {
+  const counted = screens.filter((s) => !PROGRESS_EXCLUDED.includes(s))
+  const idx = counted.indexOf(current)
+  if (idx < 0) return null
+  return { step: idx + 1, total: counted.length, label: STEP_LABELS[current] ?? '' }
+}
+
+export const STEP_LABELS: Partial<Record<FlowScreenId, string>> = {
+  'country-doc': 'Choose document',
+  'doc-capture-front': 'Scan front',
+  'doc-capture-back': 'Scan back',
+  'selfie-capture': 'Take selfie',
+  liveness: 'Presence check',
+}
+
 export const SCREEN_LABELS: Record<FlowScreenId, string> = {
   welcome: 'Welcome',
   'country-doc': 'Choose document',
-  'doc-guidance': 'Document tips',
+  'doc-guidance': 'Get ready',
   'doc-capture-front': 'Scan front',
   'doc-capture-back': 'Scan back',
   'selfie-guidance': 'Selfie tips',
-  'selfie-capture': 'Selfie',
+  'selfie-capture': 'Take selfie',
   liveness: 'Presence check',
   processing: 'Verifying',
   success: 'Verified',

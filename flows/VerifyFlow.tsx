@@ -1,8 +1,15 @@
 'use client'
 
-import { AnimatePresence } from 'framer-motion'
+import { useState } from 'react'
+import { AnimatePresence, MotionConfig } from 'framer-motion'
 import { VerifyShell } from '@/components/layout/VerifyShell'
+import { ScreenMotion } from '@/components/layout/ScreenMotion'
+import { ThemeProvider } from '@/components/layout/ThemeProvider'
+import { FlowInspector } from '@/components/demo/FlowInspector'
+import { ThemeSwitcher } from '@/components/demo/ThemeSwitcher'
 import { useVerifyFlow } from '@/hooks/useVerifyFlow'
+import { clarityTheme } from '@/lib/theme'
+import type { ClarityTheme } from '@/lib/theme'
 
 import { WelcomeScreen } from '@/screens/WelcomeScreen'
 import { CountryDocSelectScreen } from '@/screens/CountryDocSelectScreen'
@@ -14,119 +21,110 @@ import { LivenessScreen } from '@/screens/LivenessScreen'
 import { ProcessingScreen } from '@/screens/ProcessingScreen'
 import { SuccessScreen } from '@/screens/SuccessScreen'
 import { RetryScreen } from '@/screens/RetryScreen'
+import type { FlowScreenId } from '@/lib/types'
 
-/**
- * Root client component — orchestrates the full verification journey.
- *
- * Responsibilities:
- *   - Owns all flow state via useVerifyFlow
- *   - Passes scoped callbacks (onNext, onRetry, etc.) to each screen
- *   - Wraps screens in AnimatePresence for exit/enter transitions
- *   - Renders VerifyShell for the persistent top bar and mobile frame
- *
- * Screens only know their own callbacks. They have no knowledge of
- * the surrounding flow, making them fully reusable and independently testable.
- */
+const CAMERA_SCREENS: FlowScreenId[] = [
+  'doc-capture-front',
+  'doc-capture-back',
+  'selfie-capture',
+  'liveness',
+]
+
 export function VerifyFlow() {
+  const [activeTheme, setActiveTheme] = useState<ClarityTheme>(clarityTheme)
+
   const {
     state,
     currentScreen,
+    resolution,
     progress,
+    stepInfo,
     showProgress,
     showBack,
     next,
     back,
     retry,
     resolveRetry,
+    goToDocSelect,
     selectDoc,
+    applyScenario,
   } = useVerifyFlow()
 
-  function renderScreen() {
-    // Retry overlay — takes precedence over the current flow screen
+  const isCameraScreen = CAMERA_SCREENS.includes(currentScreen)
+  const screenKey = state.retryError ? `retry-${state.retryError}` : currentScreen
+
+  function renderContent() {
     if (state.retryError) {
       return (
         <RetryScreen
-          key="retry"
           errorType={state.retryError}
           onRetry={resolveRetry}
+          onChangeDoc={state.retryError === 'wrong_doc' ? goToDocSelect : undefined}
         />
       )
     }
 
     switch (currentScreen) {
       case 'welcome':
-        return <WelcomeScreen key="welcome" onStart={next} />
-
+        return <WelcomeScreen onStart={next} />
       case 'country-doc':
-        return <CountryDocSelectScreen key="country-doc" onSelect={selectDoc} />
-
+        return <CountryDocSelectScreen onSelect={selectDoc} />
       case 'doc-guidance':
-        return (
-          <DocGuidanceScreen
-            key="doc-guidance"
-            docType={state.docType}
-            onContinue={next}
-          />
-        )
-
+        return <DocGuidanceScreen docType={state.docType} onContinue={next} />
       case 'doc-capture-front':
-        return (
-          <DocCaptureScreen
-            key="doc-capture-front"
-            side="front"
-            docType={state.docType}
-            onCapture={next}
-            onRetry={retry}
-          />
-        )
-
+        return <DocCaptureScreen side="front" docType={state.docType} onCapture={next} onRetry={retry} />
       case 'doc-capture-back':
-        return (
-          <DocCaptureScreen
-            key="doc-capture-back"
-            side="back"
-            docType={state.docType}
-            onCapture={next}
-            onRetry={retry}
-          />
-        )
-
+        return <DocCaptureScreen side="back" docType={state.docType} onCapture={next} onRetry={retry} />
       case 'selfie-guidance':
-        return <SelfieGuidanceScreen key="selfie-guidance" onContinue={next} />
-
+        return <SelfieGuidanceScreen onContinue={next} />
       case 'selfie-capture':
-        return (
-          <SelfieCaptureScreen
-            key="selfie-capture"
-            onCapture={next}
-            onRetry={retry}
-          />
-        )
-
+        return <SelfieCaptureScreen onCapture={next} onRetry={retry} />
       case 'liveness':
-        return <LivenessScreen key="liveness" onComplete={next} />
-
+        return <LivenessScreen onComplete={next} />
       case 'processing':
-        return <ProcessingScreen key="processing" onComplete={next} />
-
+        return <ProcessingScreen onComplete={next} />
       case 'success':
-        return <SuccessScreen key="success" />
-
+        return <SuccessScreen />
       default:
         return null
     }
   }
 
   return (
-    <VerifyShell
-      progress={progress}
-      showProgress={showProgress}
-      showBack={showBack}
-      onBack={back}
-    >
-      <AnimatePresence mode="wait" custom={state.direction}>
-        {renderScreen()}
-      </AnimatePresence>
-    </VerifyShell>
+    // reducedMotion="user" makes all Framer Motion animations respect
+    // the OS-level prefers-reduced-motion preference.
+    <MotionConfig reducedMotion="user">
+    <ThemeProvider theme={activeTheme}>
+      <>
+        {/* Demo-only: Theme switcher pill */}
+        <ThemeSwitcher activeKey={activeTheme.key} onChange={setActiveTheme} />
+
+        <VerifyShell
+          progress={progress}
+          stepInfo={stepInfo}
+          showProgress={showProgress}
+          showBack={showBack}
+          onBack={back}
+        >
+          <AnimatePresence mode="wait" custom={state.direction}>
+            <ScreenMotion
+              key={screenKey}
+              direction={state.direction}
+              mode={isCameraScreen ? 'camera' : 'default'}
+            >
+              {renderContent()}
+            </ScreenMotion>
+          </AnimatePresence>
+        </VerifyShell>
+
+        {/* Demo-only: Flow Inspector overlay */}
+        <FlowInspector
+          resolution={resolution}
+          currentScreen={currentScreen}
+          onApplyScenario={applyScenario}
+        />
+      </>
+    </ThemeProvider>
+    </MotionConfig>
   )
 }

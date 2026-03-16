@@ -1,180 +1,127 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader } from 'lucide-react'
-import { PROCESSING_STEPS } from '@/lib/constants'
-import type { ProcessingScreenProps } from '@/lib/types'
+import { Lock } from 'lucide-react'
+import { processing } from '@/lib/content'
 
-type StepState = 'pending' | 'active' | 'done'
+const PROCESSING_STEPS = processing.steps
 
-function StepRow({
-  label,
-  state,
-  index,
-}: {
-  label: string
-  state: StepState
-  index: number
-}) {
+type State = 'pending' | 'active' | 'done'
+
+function Step({ label, state, index }: { label: string; state: State; index: number }) {
   return (
     <motion.div
-      initial={{ opacity: 0, x: -12 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: 0.1 + index * 0.06 }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.05 }}
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 14,
-        padding: '13px 16px',
-        borderRadius: 'var(--radius-lg)',
-        background: state === 'active'
-          ? 'var(--accent-muted)'
-          : state === 'done'
-            ? 'var(--success-muted)'
-            : 'var(--surface-0)',
-        border: `1px solid ${
-          state === 'active'
-            ? 'var(--accent)'
-            : state === 'done'
-              ? 'var(--success)'
-              : 'var(--border-1)'
-        }`,
-        transition: 'background 300ms ease, border-color 300ms ease',
+        display: 'flex', alignItems: 'center', gap: 14,
+        padding: '14px 16px', borderRadius: 'var(--radius-lg)',
+        background: state === 'done' ? 'var(--success-muted)' : state === 'active' ? 'var(--accent-muted)' : 'var(--surface-0)',
+        border: `1px solid ${state === 'done' ? 'var(--success)' : state === 'active' ? 'var(--accent)' : 'var(--border-1)'}`,
+        transition: 'background 400ms ease, border-color 400ms ease',
       }}
     >
-      {/* State icon */}
-      <div
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 'var(--radius-full)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-          background:
-            state === 'done'
-              ? 'var(--success)'
-              : state === 'active'
-                ? 'var(--accent)'
-                : 'var(--border-1)',
-          transition: 'background 300ms ease',
-        }}
-      >
+      <div style={{
+        width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: state === 'done' ? 'var(--success)' : state === 'active' ? 'var(--accent)' : 'var(--border-1)',
+        transition: 'background 400ms ease',
+      }}>
         <AnimatePresence mode="wait" initial={false}>
           {state === 'done' ? (
-            <motion.span
-              key="check"
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', stiffness: 340, damping: 22 }}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2 6l2.5 2.5L10 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+            <motion.span key="ck" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 340, damping: 22 }}>
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 6.5l3 3 6-6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </motion.span>
           ) : state === 'active' ? (
-            <motion.span
-              key="spin"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 0.8, ease: 'linear', repeat: Infinity }}
-              >
-                <Loader size={12} color="#fff" />
-              </motion.div>
+            <motion.span key="sp" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <motion.svg width="14" height="14" viewBox="0 0 24 24" fill="none" animate={{ rotate: 360 }} transition={{ duration: 0.8, ease: 'linear', repeat: Infinity }}>
+                <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.3)" strokeWidth="2.5"/>
+                <path d="M12 3a9 9 0 0 1 9 9" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+              </motion.svg>
             </motion.span>
           ) : (
-            <motion.span key="pending" initial={{ opacity: 0.4 }} animate={{ opacity: 0.4 }}>
-              <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                <circle cx="4" cy="4" r="3" fill="#fff" />
-              </svg>
+            <motion.span key="dot" initial={{ opacity: 0.35 }} animate={{ opacity: 0.35 }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff' }} />
             </motion.span>
           )}
         </AnimatePresence>
       </div>
-
-      {/* Label */}
-      <p
-        style={{
-          margin: 0,
-          fontSize: 14,
-          fontWeight: 500,
-          color:
-            state === 'done'
-              ? 'var(--success)'
-              : state === 'active'
-                ? 'var(--accent)'
-                : 'var(--ink-3)',
-          transition: 'color 300ms ease',
-        }}
-      >
+      <p style={{
+        margin: 0, fontSize: 14, fontWeight: 500,
+        color: state === 'done' ? 'var(--success)' : state === 'active' ? 'var(--accent)' : 'var(--ink-3)',
+        transition: 'color 400ms ease',
+      }}>
         {label}
       </p>
+      {state === 'active' && (
+        <motion.span
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0, 1, 0.45, 1] }}
+          transition={{ duration: 1.4, times: [0, 0.15, 0.6, 1], repeat: Infinity, repeatDelay: 0.1 }}
+          style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.2px' }}
+        >
+          {processing.activeLabel}
+        </motion.span>
+      )}
     </motion.div>
   )
 }
 
-export function ProcessingScreen({ onComplete }: ProcessingScreenProps) {
-  const [completedCount, setCompletedCount] = useState(0)
-  const completedRef = useRef(0)
+export function ProcessingScreen({ onComplete }: { onComplete: () => void }) {
+  const [count, setCount] = useState(0)
 
   useEffect(() => {
     let elapsed = 0
     const timers = PROCESSING_STEPS.map(({ durationMs }, i) => {
       elapsed += durationMs
       return setTimeout(() => {
-        completedRef.current = i + 1
-        setCompletedCount(i + 1)
-        if (i === PROCESSING_STEPS.length - 1) {
-          setTimeout(onComplete, 500)
-        }
+        setCount(i + 1)
+        if (i === PROCESSING_STEPS.length - 1) setTimeout(onComplete, 600)
       }, elapsed)
     })
     return () => timers.forEach(clearTimeout)
   }, [onComplete])
 
-  function getState(index: number): StepState {
-    if (index < completedCount) return 'done'
-    if (index === completedCount) return 'active'
-    return 'pending'
-  }
+  const getState = (i: number): State => i < count ? 'done' : i === count ? 'active' : 'pending'
 
   return (
-    <motion.div
-      style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: '8px 24px 0' }}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -16 }}
-      transition={{ duration: 0.3 }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: '8px 24px', paddingBottom: 'max(16px, env(safe-area-inset-bottom, 0px))' }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 28 }}>
 
-        {/* Headline */}
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.06 }}
+          initial={{ opacity: 0, y: 12, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ delay: 0.06, type: 'spring', stiffness: 140, damping: 22 }}
           style={{ textAlign: 'center' }}
         >
-          <h1 className="t-h2" style={{ color: 'var(--ink-1)', margin: '0 0 8px' }}>
-            Verifying your identity
-          </h1>
-          <p className="t-sm" style={{ color: 'var(--ink-2)', margin: 0 }}>
-            This takes just a few seconds — please don&apos;t close the page.
+          <h2 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.3px', color: 'var(--ink-1)', margin: '0 0 8px' }}>
+            {processing.heading}
+          </h2>
+          <p style={{ fontSize: 14, color: 'var(--ink-2)', margin: 0 }}>
+            {processing.subheading}
           </p>
         </motion.div>
 
-        {/* Steps */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* role="status" + aria-live announces step completions without interrupting */}
+        <div role="status" aria-live="polite" aria-atomic="false" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {PROCESSING_STEPS.map(({ id, label }, i) => (
-            <StepRow key={id} label={label} state={getState(i)} index={i} />
+            <Step key={id} label={label} state={getState(i)} index={i} />
           ))}
         </div>
+
+        {/* Trust note at bottom */}
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+        >
+          <Lock size={11} style={{ color: 'var(--ink-3)', flexShrink: 0 }} strokeWidth={2} />
+          <p style={{ fontSize: 12, color: 'var(--ink-3)', margin: 0, textAlign: 'center' }}>
+            {processing.trustNote}
+          </p>
+        </motion.div>
       </div>
-    </motion.div>
+    </div>
   )
 }

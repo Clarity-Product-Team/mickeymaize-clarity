@@ -21,6 +21,9 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: '#4F5BD5',
+  // Extends content into notch / Dynamic Island area so
+  // env(safe-area-inset-*) can push UI away from hardware edges
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({

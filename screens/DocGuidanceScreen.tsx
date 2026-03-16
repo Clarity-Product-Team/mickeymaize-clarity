@@ -2,216 +2,123 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { SunMedium, Eye, Maximize2, ArrowRight, Camera } from 'lucide-react'
+import { SunMedium, BookOpen, Maximize2, ArrowRight, Camera, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/primitives/Button'
-import { NoticeBox } from '@/components/primitives/NoticeBox'
-import { DOC_LABEL_LOWER } from '@/lib/constants'
-import type { DocGuidanceScreenProps } from '@/lib/types'
+import { docGuidance, DOC_LABEL_LOWER } from '@/lib/content'
+import type { DocType } from '@/lib/types'
 
-interface Tip {
-  icon: React.ElementType
-  title: string
-  description: string
-  color: string
-  bg: string
-}
-
-const TIPS: Tip[] = [
-  {
-    icon: SunMedium,
-    title: 'Good lighting',
-    description: 'Place your document on a flat, well-lit surface. Avoid shadows and glare.',
-    color: 'var(--warning)',
-    bg: 'var(--warning-muted)',
-  },
-  {
-    icon: Eye,
-    title: 'Remove from sleeve',
-    description: 'Take the document out of any protective sleeve or wallet.',
-    color: 'var(--accent)',
-    bg: 'var(--accent-muted)',
-  },
-  {
-    icon: Maximize2,
-    title: 'All corners visible',
-    description: 'Make sure all four corners of the document are within the frame.',
-    color: 'var(--success)',
-    bg: 'var(--success-muted)',
-  },
+const CHECK_STYLES = [
+  { icon: SunMedium, color: '#E8A020', bg: 'var(--warning-muted)' },
+  { icon: BookOpen,  color: 'var(--accent)', bg: 'var(--accent-muted)' },
+  { icon: Maximize2, color: 'var(--success)', bg: 'var(--success-muted)' },
 ]
 
-export function DocGuidanceScreen({ docType, onContinue }: DocGuidanceScreenProps) {
-  const [tipIndex, setTipIndex] = useState(0)
-  const tip = TIPS[tipIndex]
-  const docLabel = DOC_LABEL_LOWER[docType] ?? 'document'
+export function DocGuidanceScreen({ docType, onContinue }: { docType: DocType; onContinue: () => void }) {
+  const [checked, setChecked] = useState<Set<number>>(new Set())
+  const allChecked = checked.size === docGuidance.checks.length
+  const label = DOC_LABEL_LOWER[docType] ?? 'document'
 
-  // Auto-advance through tips
+  // Auto-check items with natural stagger — gives the user time to read each before it resolves
   useEffect(() => {
-    if (tipIndex >= TIPS.length - 1) return
-    const t = setTimeout(() => setTipIndex((i) => i + 1), 2200)
-    return () => clearTimeout(t)
-  }, [tipIndex])
+    const delays = [900, 1800, 2800]
+    const timers = docGuidance.checks.map((_, i) =>
+      setTimeout(() => setChecked(prev => new Set([...prev, i])), delays[i] ?? 900 + i * 700)
+    )
+    return () => timers.forEach(clearTimeout)
+  }, [])
 
   return (
-    <motion.div
-      style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: '4px 24px 0' }}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -16 }}
-      transition={{ duration: 0.3 }}
-    >
-      {/* Heading */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.05 }}
-        style={{ marginBottom: 20 }}
-      >
-        <h2 className="t-h2" style={{ color: 'var(--ink-1)', margin: '0 0 6px' }}>
-          Get your {docLabel} ready
-        </h2>
-        <p className="t-sm" style={{ color: 'var(--ink-2)', margin: 0 }}>
-          Follow these tips for the best scan result.
-        </p>
-      </motion.div>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {/* Animated tip card */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tipIndex}
-            initial={{ opacity: 0, scale: 0.96, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: -8 }}
-            transition={{ duration: 0.26 }}
-            style={{
-              borderRadius: 'var(--radius-xl)',
-              padding: '24px 20px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              textAlign: 'center',
-              gap: 16,
-              minHeight: 170,
-              background: tip.bg,
-            }}
-          >
-            <div
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 'var(--radius-lg)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: `color-mix(in srgb, ${tip.color} 18%, transparent)`,
-              }}
-            >
-              <tip.icon size={24} style={{ color: tip.color }} strokeWidth={1.8} />
-            </div>
-            <div>
-              <p style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, color: 'var(--ink-1)' }}>
-                {tip.title}
-              </p>
-              <p className="t-sm" style={{ color: 'var(--ink-2)', margin: 0 }}>
-                {tip.description}
-              </p>
-            </div>
-          </motion.div>
-        </AnimatePresence>
+      {/* Scrollable content */}
+      <div className="screen-scroll" style={{ padding: '8px 24px 0' }}>
 
-        {/* Dot indicators */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
-          {TIPS.map((_, i) => (
-            <motion.button
-              key={i}
-              onClick={() => setTipIndex(i)}
-              animate={{
-                width: i === tipIndex ? 20 : 8,
-                background: i === tipIndex ? 'var(--accent)' : 'var(--border-1)',
-              }}
-              transition={{ duration: 0.22 }}
-              style={{ height: 8, borderRadius: 'var(--radius-full)', border: 'none', cursor: 'pointer' }}
-              aria-label={`Tip ${i + 1}`}
-            />
-          ))}
-        </div>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.2px', color: 'var(--ink-1)', margin: '0 0 4px' }}>
+            {docGuidance.heading}
+          </h2>
+          <p style={{ fontSize: 14, color: 'var(--ink-2)', margin: '0 0 18px' }}>
+            {docGuidance.subheading}
+          </p>
+        </motion.div>
 
-        {/* All tips summary list */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {TIPS.map(({ icon: Icon, title, color }, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: i <= tipIndex ? 1 : 0.35, x: 0 }}
-              transition={{ delay: i * 0.07 }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '10px 14px',
-                borderRadius: 'var(--radius-md)',
-                background: i <= tipIndex ? 'var(--surface-0)' : 'transparent',
-                border: '1px solid var(--border-1)',
-              }}
-            >
-              <div
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {docGuidance.checks.map(({ title, body }, i) => {
+            const { icon: Icon, color, bg } = CHECK_STYLES[i]
+            const isChecked = checked.has(i)
+            return (
+              <motion.button
+                key={title}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.08 + i * 0.06 }}
+                onClick={() => setChecked(prev => new Set([...prev, i]))}
+                aria-pressed={isChecked}
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: `color-mix(in srgb, ${color} 15%, transparent)`,
-                  flexShrink: 0,
+                  display: 'flex', alignItems: 'flex-start', gap: 14,
+                  minHeight: 60,
+                  padding: '14px 16px',
+                  borderRadius: 'var(--radius-lg)',
+                  background: isChecked ? bg : 'var(--surface-0)',
+                  border: `1.5px solid ${isChecked ? color : 'var(--border-1)'}`,
+                  cursor: 'pointer', textAlign: 'left',
+                  WebkitTapHighlightColor: 'transparent',
+                  transition: 'all 250ms ease',
                 }}
               >
-                <Icon size={14} style={{ color }} strokeWidth={2} />
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-1)' }}>{title}</span>
-              {i < tipIndex && (
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  style={{
-                    marginLeft: 'auto',
-                    width: 20,
-                    height: 20,
-                    borderRadius: 'var(--radius-full)',
-                    background: 'var(--success)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                    <path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </motion.div>
-              )}
-            </motion.div>
-          ))}
+                <div style={{
+                  width: 40, height: 40, borderRadius: 'var(--radius-md)', flexShrink: 0,
+                  background: isChecked ? color : 'var(--surface-1)',
+                  border: `1px solid ${isChecked ? 'transparent' : 'var(--border-1)'}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 250ms ease',
+                }}>
+                  <AnimatePresence mode="wait" initial={false}>
+                    {isChecked ? (
+                      <motion.div key="check" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ type: 'spring', stiffness: 340, damping: 20 }}>
+                        <CheckCircle size={18} color="#fff" />
+                      </motion.div>
+                    ) : (
+                      <motion.div key="icon" initial={{ scale: 0 }} animate={{ scale: 1 }}>
+                        <Icon size={18} style={{ color }} strokeWidth={1.8} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: isChecked ? 'var(--ink-1)' : 'var(--ink-2)' }}>{title}</p>
+                  <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>{body}</p>
+                </div>
+              </motion.button>
+            )
+          })}
         </div>
+
       </div>
 
-      {/* Camera permission notice + CTA */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 16 }}>
+      {/* Sticky footer: camera notice + CTA */}
+      <div className="screen-footer" style={{ display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border-1)' }}>
         <motion.div
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
+          style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            padding: '10px 12px', borderRadius: 'var(--radius-md)',
+            background: 'var(--accent-muted)', borderLeft: '3px solid var(--accent)',
+          }}
         >
-          <NoticeBox variant="info" icon={Camera} title="Camera access needed">
-            Your browser will ask for permission when you tap the button below.
-            We never store your camera feed.
-          </NoticeBox>
+          <Camera size={13} style={{ color: 'var(--accent)', marginTop: 1, flexShrink: 0 }} strokeWidth={2} aria-hidden="true" />
+          <p style={{ margin: 0, fontSize: 11.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>
+            <strong style={{ color: 'var(--ink-1)', fontWeight: 600 }}>{docGuidance.cameraNote.bold}</strong>{' '}
+            {docGuidance.cameraNote.body}
+          </p>
         </motion.div>
-        <Button onClick={onContinue} icon={<ArrowRight size={16} />}>
-          I&apos;m ready — scan now
+
+        <Button onClick={onContinue} icon={<ArrowRight size={15} />}>
+          {allChecked ? docGuidance.ctaDynamic(label) : docGuidance.ctaDefault}
         </Button>
       </div>
-    </motion.div>
+    </div>
   )
 }

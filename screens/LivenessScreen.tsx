@@ -1,85 +1,79 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { ShieldCheck } from 'lucide-react'
 import { CameraFrame } from '@/components/camera/CameraFrame'
 import { FaceOverlay } from '@/components/camera/FaceOverlay'
-import type { LivenessScreenProps } from '@/lib/types'
+import { liveness } from '@/lib/content'
 
-const TOTAL_MS = 3000
-const TICK_MS = 40
+const DURATION_MS = 3200
+const TICK_MS = 32
 
-export function LivenessScreen({ onComplete }: LivenessScreenProps) {
+// ── Status text progression ───────────────────────────────────────────────────
+
+function getStatusText(progress: number, done: boolean): { text: string; color: string } {
+  if (done) return { text: liveness.status.done, color: 'var(--success)' }
+  if (progress > 0.75) return { text: liveness.status.almost, color: 'rgba(255,255,255,0.85)' }
+  if (progress > 0.35) return { text: liveness.status.steady, color: 'rgba(255,255,255,0.72)' }
+  return { text: liveness.status.start, color: 'rgba(255,255,255,0.6)' }
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
+
+export function LivenessScreen({ onComplete }: { onComplete: () => void }) {
   const [progress, setProgress] = useState(0)
   const [done, setDone] = useState(false)
-
-  const secondsLeft = Math.ceil((1 - progress) * (TOTAL_MS / 1000))
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
-    const step = TICK_MS / TOTAL_MS
-    const id = setInterval(() => {
+    const step = TICK_MS / DURATION_MS
+
+    intervalRef.current = setInterval(() => {
       setProgress((p) => {
         const next = p + step
         if (next >= 1) {
-          clearInterval(id)
+          if (intervalRef.current) clearInterval(intervalRef.current)
           setDone(true)
-          setTimeout(onComplete, 700)
+          setTimeout(onComplete, 820)
           return 1
         }
         return next
       })
     }, TICK_MS)
-    return () => clearInterval(id)
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
   }, [onComplete])
 
+  const status = getStatusText(progress, done)
+  const statusKey = done ? 'done' : progress > 0.75 ? 'almost' : progress > 0.35 ? 'steady' : 'start'
+
   return (
-    <motion.div
-      style={{ display: 'flex', flexDirection: 'column', flex: 1 }}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -16 }}
-      transition={{ duration: 0.3 }}
-    >
-      {/* Header */}
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <div style={{ padding: '4px 24px 10px' }}>
-        <h2 className="t-h3" style={{ color: 'var(--ink-1)', margin: '0 0 2px' }}>
-          Presence check
+        <h2
+          style={{
+            fontSize: 17,
+            fontWeight: 700,
+            color: 'var(--ink-1)',
+            margin: '0 0 3px',
+          }}
+        >
+          {liveness.heading}
         </h2>
-        <p className="t-caption" style={{ color: 'var(--ink-2)', margin: 0 }}>
-          Hold still for a moment while we confirm you&apos;re present
+        <p style={{ fontSize: 12, color: 'var(--ink-2)', margin: 0, lineHeight: 1.45 }}>
+          {liveness.subheading}
         </p>
       </div>
 
-      {/* Camera */}
+      {/* ── Camera viewport ──────────────────────────────────────────────── */}
       <CameraFrame style={{ flex: 1 }} minHeight={320}>
-        {/* Status chip */}
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 16px 0' }}>
-          <div
-            style={{
-              padding: '6px 16px',
-              borderRadius: 'var(--radius-full)',
-              background: 'rgba(255,255,255,0.12)',
-              backdropFilter: 'blur(6px)',
-              fontSize: 13,
-              fontWeight: 500,
-              color: '#fff',
-            }}
-          >
-            <AnimatePresence mode="wait">
-              {done ? (
-                <motion.span key="done" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  Presence confirmed ✓
-                </motion.span>
-              ) : (
-                <motion.span key="scanning" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  Scanning… keep still
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
 
-        {/* Face oval with arc progress */}
+        {/* Face oval + arc */}
         <div
           style={{
             position: 'absolute',
@@ -90,42 +84,100 @@ export function LivenessScreen({ onComplete }: LivenessScreenProps) {
             pointerEvents: 'none',
           }}
         >
-          <FaceOverlay allGood={done} livenessProgress={progress} showArc />
+          <FaceOverlay
+            allGood={done}
+            livenessProgress={progress}
+            showArc
+          />
         </div>
 
-        {/* Countdown */}
-        {!done && (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 24,
-              left: 0,
-              right: 0,
-              textAlign: 'center',
-            }}
-          >
-            <motion.p
-              key={secondsLeft}
-              initial={{ scale: 1.3, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.18 }}
-              className="tabular"
-              style={{ fontSize: 36, fontWeight: 700, color: '#fff', margin: 0 }}
+        {/* Status text — bottom of camera frame */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 0, left: 0, right: 0,
+            padding: '0 16px 18px',
+            display: 'flex',
+            justifyContent: 'center',
+          }}
+        >
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={statusKey}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.24 }}
+              style={{
+                padding: '8px 20px',
+                borderRadius: 99,
+                background: 'rgba(8, 8, 18, 0.78)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+              }}
             >
-              {secondsLeft}
-            </motion.p>
-          </div>
-        )}
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: status.color,
+                  lineHeight: 1,
+                  transition: 'color 0.4s ease',
+                }}
+              >
+                {status.text}
+              </p>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Done: green success overlay */}
+        <AnimatePresence>
+          {done && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'rgba(0,179,125,0.07)',
+                pointerEvents: 'none',
+              }}
+            />
+          )}
+        </AnimatePresence>
       </CameraFrame>
 
-      {/* Sub-caption */}
-      <div style={{ padding: '12px 24px 4px', textAlign: 'center' }}>
-        <p className="t-caption" style={{ color: 'var(--ink-3)', margin: 0 }}>
-          {done
-            ? 'All done — moving on…'
-            : 'Look directly at the camera. No action needed.'}
-        </p>
+      {/* ── Below camera ─────────────────────────────────────────────────── */}
+      <div style={{ padding: '12px 24px', paddingBottom: 'max(14px, env(safe-area-inset-bottom, 0px))' }}>
+
+        {/* Privacy + compliance note — combined */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 8,
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-md)',
+            background: 'var(--surface-0)',
+            border: '1px solid var(--border-1)',
+          }}
+        >
+          <ShieldCheck size={13} style={{ color: 'var(--accent)', marginTop: 1, flexShrink: 0 }} strokeWidth={2} />
+          <div>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.5 }}>
+              {liveness.privacy.short}{' '}{liveness.privacy.long}
+            </p>
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--ink-3)' }}>
+              {liveness.trustBadge}
+            </p>
+          </div>
+        </motion.div>
       </div>
-    </motion.div>
+    </div>
   )
 }
