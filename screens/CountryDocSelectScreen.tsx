@@ -5,12 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, Check, ArrowRight, ShieldCheck, Shield, ShieldAlert, FileText, RefreshCw, Camera, Eye } from 'lucide-react'
 import { Badge } from '@/components/primitives/Badge'
 import { Button } from '@/components/primitives/Button'
-import { DOC_TYPES, COUNTRIES } from '@/lib/constants'
-import { evaluateFlow, detectDeviceType } from '@/lib/flowEngine'
-import { FLOW_RULES } from '@/lib/flowRules'
 import { deriveRiskLevel, RISK_LABELS, RISK_COLORS, RISK_BG } from '@/lib/riskData'
-import { SCREEN_LABELS } from '@/lib/flow'
-import type { DocType, FlowScreenId, RiskLevel } from '@/lib/types'
+import { countryDoc } from '@/lib/content'
+import { defaultDocSelectConfig } from '@/lib/docSelectConfig'
+import type { DocSelectConfig } from '@/lib/docSelectConfig'
+import type { DocTypeConfig } from '@/lib/constants'
+import type { DocType, RiskLevel } from '@/lib/types'
 
 // ── Document illustration ─────────────────────────────────────────────────────
 
@@ -79,30 +79,81 @@ function RiskBadge({ level }: { level: RiskLevel }) {
   )
 }
 
-// ── Flow preview step pill ────────────────────────────────────────────────────
+// ── Journey hint ──────────────────────────────────────────────────────────────
+//
+// Replaces the previous FlowPreview, which ran evaluateFlow() inside the screen
+// and showed a fixed step sequence. This component derives what it shows from
+// doc config + risk level only — no flow engine dependency.
+//
+// Language is intentionally conditional:
+//  - back capture shown only when requiresBackCapture is true for the selected doc
+//  - liveness shown with "may" for medium risk, "required" for high risk
+//  - never asserts a complete fixed journey
 
-const STEP_ICONS: Partial<Record<FlowScreenId, typeof FileText>> = {
-  'doc-capture-front': FileText,
-  'doc-capture-back': RefreshCw,
-  'selfie-capture': Camera,
-  liveness: Eye,
+function StepPill({
+  icon: Icon,
+  label,
+  conditional = false,
+}: {
+  icon: typeof FileText
+  label: string
+  conditional?: boolean
+}) {
+  const color = conditional ? 'var(--warning)' : 'var(--accent)'
+  const bg = conditional ? 'var(--warning-muted)' : 'var(--accent-muted)'
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 5,
+      padding: '6px 10px',
+      borderRadius: 'var(--radius-full)',
+      background: bg,
+      border: `1px solid ${color}`,
+      opacity: conditional ? 0.85 : 1,
+    }}>
+      <Icon size={11} style={{ color }} strokeWidth={2} />
+      <span style={{ fontSize: 12, fontWeight: 500, color }}>
+        {label}
+      </span>
+      {conditional && (
+        <span style={{ fontSize: 10, color, opacity: 0.7, fontWeight: 600 }}>?</span>
+      )}
+    </div>
+  )
 }
 
-const PREVIEW_SCREENS: FlowScreenId[] = [
-  'doc-capture-front',
-  'doc-capture-back',
-  'selfie-capture',
-  'liveness',
-]
+function StepArrow() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+      <path d="M2 5h6M6 3l2 2-2 2" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 
-function FlowPreview({
-  screens,
+function JourneyHint({
+  docConfig,
   riskLevel,
+  livenessRequired = false,
 }: {
-  screens: FlowScreenId[]
+  docConfig: DocTypeConfig
   riskLevel: RiskLevel
+  /**
+   * When true, a liveness step is shown in the journey preview as a definite
+   * (non-conditional) step. Sourced from VerificationFlowConfig.liveness.required
+   * when the new config system is in use; falls back to false otherwise.
+   */
+  livenessRequired?: boolean
 }) {
-  const previewSteps = screens.filter((s) => PREVIEW_SCREENS.includes(s))
+  const { journeyHint } = countryDoc
+  const showBackCapture = docConfig.requiresBackCapture
+
+  const steps: Array<{ icon: typeof FileText; label: string; conditional: boolean }> = [
+    { icon: FileText, label: journeyHint.steps.docFront, conditional: false },
+    ...(showBackCapture ? [{ icon: RefreshCw, label: journeyHint.steps.docBack, conditional: false }] : []),
+    { icon: Camera, label: journeyHint.steps.selfie, conditional: false },
+    ...(livenessRequired ? [{ icon: Eye, label: journeyHint.steps.liveness, conditional: false }] : []),
+  ]
 
   return (
     <motion.div
@@ -125,7 +176,7 @@ function FlowPreview({
         marginBottom: 10,
       }}>
         <p style={{ margin: 0, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--ink-3)' }}>
-          Your journey
+          {journeyHint.heading}
         </p>
         <AnimatePresence mode="wait">
           <RiskBadge level={riskLevel} />
@@ -135,9 +186,9 @@ function FlowPreview({
       {/* Step pills */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <AnimatePresence mode="popLayout">
-          {previewSteps.map((screen, i) => (
+          {steps.map(({ icon, label, conditional }, i) => (
             <motion.div
-              key={screen}
+              key={label}
               layout
               initial={{ opacity: 0, scale: 0.8, x: -8 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
@@ -145,69 +196,16 @@ function FlowPreview({
               transition={{ duration: 0.22, delay: i * 0.04 }}
               style={{ display: 'flex', alignItems: 'center', gap: 6 }}
             >
-              {(() => {
-                const StepIcon = STEP_ICONS[screen]
-                const isLiveness = screen === 'liveness'
-                const iconColor = isLiveness
-                  ? riskLevel === 'high' ? 'var(--danger)' : 'var(--warning)'
-                  : 'var(--accent)'
-                const bgColor = isLiveness
-                  ? riskLevel === 'high' ? 'var(--danger-muted)' : 'var(--warning-muted)'
-                  : 'var(--accent-muted)'
-                return (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    padding: '6px 10px',
-                    borderRadius: 'var(--radius-full)',
-                    background: bgColor,
-                    border: `1px solid ${iconColor}`,
-                  }}>
-                    {StepIcon && <StepIcon size={11} style={{ color: iconColor }} strokeWidth={2} />}
-                    <span style={{ fontSize: 12, fontWeight: 500, color: iconColor }}>
-                      {SCREEN_LABELS[screen]}
-                    </span>
-                  </div>
-                )
-              })()}
-
-              {/* Arrow between steps */}
-              {i < previewSteps.length - 1 && (
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <path d="M2 5h6M6 3l2 2-2 2" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
+              <StepPill icon={icon} label={label} conditional={conditional} />
+              {i < steps.length - 1 && <StepArrow />}
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
 
-      {/* Note for liveness */}
-      <AnimatePresence>
-        {screens.includes('liveness') && (
-          <motion.div
-            key="liveness-note"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.22 }}
-            style={{ margin: '10px 0 0', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <div style={{
-              width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-              background: riskLevel === 'high' ? 'var(--danger)' : riskLevel === 'medium' ? 'var(--warning)' : 'var(--accent)',
-            }} />
-            <span style={{ fontSize: 11, color: 'var(--ink-3)', lineHeight: 1.45 }}>
-              {riskLevel === 'high'
-                ? 'Presence check required — high-risk jurisdiction'
-                : riskLevel === 'medium'
-                  ? 'Presence check required — enhanced verification'
-                  : 'Presence check required — compliance rule applies'}
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Liveness note removed — liveness is now shown as an explicit step pill
+          when livenessRequired is true, rather than as a conditional sub-note
+          derived from risk level. */}
     </motion.div>
   )
 }
@@ -216,21 +214,43 @@ function FlowPreview({
 
 export function CountryDocSelectScreen({
   onSelect,
+  config = defaultDocSelectConfig,
+  livenessRequired = false,
 }: {
   onSelect: (docType: DocType, country: string) => void
+  /**
+   * Drives the country list and available document types.
+   * Defaults to the static fallback — swap for a session config payload
+   * once the backend service layer is in place.
+   */
+  config?: DocSelectConfig
+  /**
+   * Whether liveness verification is required for this flow.
+   * When true the journey hint shows a definite liveness step.
+   * Sourced from VerificationFlowConfig.liveness.required.
+   * Defaults to false (existing behaviour) when not provided.
+   */
+  livenessRequired?: boolean
 }) {
   const [country, setCountry] = useState('United Kingdom')
   const [selectedDoc, setSelectedDoc] = useState<DocType | null>(null)
 
   const riskLevel = useMemo(() => deriveRiskLevel(country), [country])
 
-  const resolution = useMemo(() => {
-    if (!selectedDoc) return null
-    return evaluateFlow(
-      { docType: selectedDoc, country, riskLevel, deviceType: detectDeviceType() },
-      FLOW_RULES,
-    )
-  }, [selectedDoc, country, riskLevel])
+  // Doc types are now determined by the config for the selected country,
+  // not by a hardcoded constant imported directly into this screen.
+  const docTypes = useMemo(() => config.getDocTypes(country), [config, country])
+
+  const selectedDocConfig = useMemo(
+    () => docTypes.find((d) => d.id === selectedDoc) ?? null,
+    [docTypes, selectedDoc],
+  )
+
+  function handleCountryChange(next: string) {
+    setCountry(next)
+    // Reset doc selection when country changes — available types may differ
+    setSelectedDoc(null)
+  }
 
   function handleDocClick(id: DocType) {
     setSelectedDoc(id)
@@ -249,23 +269,23 @@ export function CountryDocSelectScreen({
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
           <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.2px', color: 'var(--ink-1)', margin: '0 0 4px' }}>
-            Your document
+            {countryDoc.heading}
           </h2>
           <p style={{ fontSize: 14, color: 'var(--ink-2)', margin: '0 0 18px' }}>
-            We&apos;ll guide you through scanning it.
+            {countryDoc.subheading}
           </p>
         </motion.div>
 
         {/* Country dropdown */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} style={{ marginBottom: 16 }}>
           <label htmlFor="country" style={{ display: 'block', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--ink-2)', marginBottom: 6 }}>
-            Issuing country
+            {countryDoc.countryLabel}
           </label>
           <div style={{ position: 'relative' }}>
             <select
               id="country"
               value={country}
-              onChange={(e) => { setCountry(e.target.value); setSelectedDoc(null) }}
+              onChange={(e) => handleCountryChange(e.target.value)}
               style={{
                 width: '100%', height: 52, padding: '0 38px 0 14px',
                 borderRadius: 'var(--radius-sm)', border: '1.5px solid var(--border-2)',
@@ -274,15 +294,15 @@ export function CountryDocSelectScreen({
                 fontFamily: 'inherit',
               }}
             >
-              {COUNTRIES.map((c) => <option key={c}>{c}</option>)}
+              {config.countries.map((c) => <option key={c}>{c}</option>)}
             </select>
             <ChevronDown size={15} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--ink-3)' }} />
           </div>
         </motion.div>
 
-        {/* Doc cards */}
+        {/* Doc type cards — driven by config.getDocTypes(country) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-          {DOC_TYPES.map(({ id, label, description, sides }, i) => {
+          {docTypes.map(({ id, label, description, requiresBackCapture }, i) => {
             const isSelected = selectedDoc === id
             return (
               <motion.button
@@ -312,7 +332,7 @@ export function CountryDocSelectScreen({
                   <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--ink-3)' }}>{description}</p>
                 </div>
                 <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {sides === 2 && <Badge variant="accent" size="sm">2 sides</Badge>}
+                  {requiresBackCapture && <Badge variant="accent" size="sm">2 sides</Badge>}
                   <AnimatePresence>
                     {isSelected && (
                       <motion.div
@@ -331,17 +351,17 @@ export function CountryDocSelectScreen({
           })}
         </div>
 
-        {/* Flow preview — slides in on doc selection */}
+        {/* Journey hint — slides in on doc selection */}
         <AnimatePresence>
-          {selectedDoc && resolution && (
+          {selectedDoc && selectedDocConfig && (
             <motion.div
-              key="preview"
+              key="hint"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               style={{ marginTop: 4, paddingBottom: 8 }}
             >
-              <FlowPreview screens={resolution.screens} riskLevel={riskLevel} />
+              <JourneyHint docConfig={selectedDocConfig} riskLevel={riskLevel} livenessRequired={livenessRequired} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -361,7 +381,7 @@ export function CountryDocSelectScreen({
             style={{ borderTop: '1px solid var(--border-1)' }}
           >
             <Button onClick={handleConfirm} icon={<ArrowRight size={15} />}>
-              Continue
+              {countryDoc.cta}
             </Button>
           </motion.div>
         )}

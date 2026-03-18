@@ -7,6 +7,8 @@ export interface DocTypeConfig {
   label: string
   description: string
   sides: 1 | 2
+  /** Whether the capture flow requires a back-side scan for this document type. */
+  requiresBackCapture: boolean
 }
 
 export const DOC_TYPES: DocTypeConfig[] = [
@@ -15,24 +17,28 @@ export const DOC_TYPES: DocTypeConfig[] = [
     label: 'Passport',
     description: 'Accepted worldwide',
     sides: 1,
+    requiresBackCapture: false,
   },
   {
     id: 'drivers-license',
     label: "Driver's License",
     description: 'Front and back required',
     sides: 2,
+    requiresBackCapture: true,
   },
   {
     id: 'national-id',
     label: 'National ID',
     description: 'Front and back required',
     sides: 2,
+    requiresBackCapture: true,
   },
   {
     id: 'residence-permit',
     label: 'Residence Permit',
     description: 'Front and back required',
     sides: 2,
+    requiresBackCapture: true,
   },
 ]
 

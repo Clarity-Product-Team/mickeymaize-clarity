@@ -30,6 +30,12 @@ interface UseVerifyFlowResult {
   resolveRetry: () => void
   /** Navigate back to the document-selection screen (used when wrong_doc is retried) */
   goToDocSelect: () => void
+  /**
+   * Jump directly to a named screen in the current flow.
+   * No-ops if the screen is not in the current screen list (e.g. liveness
+   * not required for the selected flow). Used for resume navigation.
+   */
+  goToScreen: (screen: FlowScreenId) => void
   selectDoc: (docType: DocType, country: string) => void
   applyScenario: (scenario: DemoScenario) => void
 }
@@ -94,6 +100,15 @@ export function useVerifyFlow(): UseVerifyFlowResult {
 
   const resolveRetry = useCallback(() => {
     setState((prev) => ({ ...prev, retryError: null }))
+  }, [])
+
+  /** Jump to any named screen in the current flow (for resume / retry navigation). */
+  const goToScreen = useCallback((screen: FlowScreenId) => {
+    setState((prev) => {
+      const idx = prev.screens.indexOf(screen)
+      if (idx < 0) return prev
+      return { ...prev, screenIndex: idx, retryError: null, direction: 1 }
+    })
   }, [])
 
   /** Go back to the document-selection screen, clearing any retry error. */
@@ -176,6 +191,7 @@ export function useVerifyFlow(): UseVerifyFlowResult {
     retry,
     resolveRetry,
     goToDocSelect,
+    goToScreen,
     selectDoc,
     applyScenario,
   }

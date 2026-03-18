@@ -26,6 +26,26 @@ export const welcome = {
   ],
   cta: 'Get started',
   privacyNote: "Your information is encrypted and never sold or shared.",
+  /**
+   * Mode-specific overrides applied when mode !== 'fresh'.
+   * In production these would come from session config / API response.
+   */
+  modes: {
+    resume: {
+      badge: 'Resuming',
+      heading: 'Continue\nyour check',
+      subheading: 'Pick up where you left off — your progress is saved.',
+      notice: "Your previous progress is saved. Tap continue and we'll carry on from where you stopped.",
+      cta: 'Continue',
+    },
+    restart: {
+      badge: "Let's retry",
+      heading: "Let's try\nagain",
+      subheading: "Something went wrong. We'll guide you through it step by step.",
+      notice: "Something didn't go through last time — no problem. We'll walk you through it again.",
+      cta: 'Try again',
+    },
+  },
 } as const
 
 // ─── Country & doc select ─────────────────────────────────────────────────────
@@ -34,11 +54,23 @@ export const countryDoc = {
   heading: 'Your document',
   subheading: "We'll guide you through scanning it.",
   countryLabel: 'Issuing country',
-  journeyHeading: 'Your journey',
-  livenessNote: {
-    high: '🔴 Presence check required — high-risk jurisdiction',
-    medium: '🟡 Presence check required — enhanced verification',
-    low: '🔵 Presence check required — compliance rule applies',
+  journeyHint: {
+    heading: 'What to expect',
+    steps: {
+      docFront: 'Scan document',
+      docBack: 'Both sides',
+      selfie: 'Selfie',
+      liveness: 'Presence check',
+    },
+    /**
+     * Shown beneath the step pills when liveness may be required.
+     * Uses "may" not "will" — liveness insertion is conditional on rule evaluation
+     * and the full resolved flow isn't known yet at this point in the journey.
+     */
+    livenessConditionalNote: {
+      medium: 'A presence check may be required for enhanced verification.',
+      high: 'A presence check is required for this jurisdiction.',
+    },
   },
   cta: 'Continue',
 } as const
@@ -48,23 +80,34 @@ export const countryDoc = {
 export const docGuidance = {
   heading: 'Before you scan',
   subheading: 'A few seconds of prep makes a big difference.',
-  checks: [
-    {
+  /**
+   * Keyed checklist items — the screen builds the active list from these
+   * based on doc context (e.g. requiresBackCapture, future: docType, riskLevel).
+   *
+   * Production path: this object would be returned by the session config API,
+   * allowing item copy and ordering to vary per client or jurisdiction.
+   */
+  checkItems: {
+    lighting: {
       title: 'Good lighting',
       body: 'Lay it on a flat surface with no harsh shadows or glare.',
     },
-    {
+    removeFromWallet: {
       title: 'Take it out',
       body: 'Remove it from your wallet, card holder, or sleeve.',
     },
-    {
-      title: 'All four corners visible',
-      body: 'Move back until the whole document fits the frame.',
+    bothSides: {
+      title: 'Front and back',
+      body: "We'll scan both sides. Have the back ready — you'll be prompted to flip it over.",
     },
-  ],
-  cameraNote: {
-    bold: 'Camera access needed.',
-    body: "Your browser will ask once. We never record or store your camera feed.",
+    cornersVisible: {
+      title: 'All four corners',
+      body: 'Move back until the whole document fits inside the frame.',
+    },
+    cameraAccess: {
+      title: 'Camera access',
+      body: "Your browser will ask for permission once. We never record or store your feed.",
+    },
   },
   ctaDynamic: (label: string) => `Scan my ${label}`,
   ctaDefault: 'Continue',
@@ -85,10 +128,40 @@ export const docCapture = {
   stuckNudge: 'Still having trouble? More light and a flatter surface usually help.',
   uploadLabel: 'Upload a photo instead',
   review: {
+    /** Heading shown once validation passes. */
     heading: 'Looks good — use this?',
+    /** Heading shown while validation is running. */
+    checkingHeading: 'Photo captured',
+    /** Label shown next to the spinner during the checking phase. */
+    checkingLabel: 'Checking image quality…',
     retake: 'Retake',
     confirm: 'Use this photo',
   },
+  /**
+   * Header subtitle copy for each CapturePhase.
+   * Issue states (too_dark, too_far, etc.) are handled by DocCaptureInstruction
+   * overlay — the header falls back to the generic 'scanning' copy for those.
+   */
+  phases: {
+    detecting:        'Looking for your document…',
+    good_positioning: 'Looks good — hold steady',
+    hold_steady:      'Hold still — capturing now…',
+    capturing:        'Photo captured',
+    validating:       'Checking quality…',
+    scanning:         'Position your document inside the frame',
+  },
+  /**
+   * Shown when the browser camera permission is denied or blocked.
+   * Production: copy may vary by client or jurisdiction.
+   */
+  cameraPermissionDenied: {
+    heading: 'Camera access blocked',
+    body: 'To scan your document, allow camera access in your browser settings and reload this page.',
+    upload: 'Upload a photo instead',
+    reload: 'Reload page',
+  },
+  /** Inline error shown when a gallery upload fails. Auto-dismisses after 3 s. */
+  uploadFailed: 'Upload failed — the file may be invalid or too large.',
 }
 
 // ─── Doc capture instructions (in-camera overlay) ────────────────────────────
@@ -149,6 +222,31 @@ export const selfieCapture = {
     default:      { title: 'Your selfie', sub: "We'll capture automatically once everything looks good" },
   },
   privacyNote: "Your selfie is only used to match the photo on your document.",
+  /**
+   * Shown when the browser camera permission is denied or blocked.
+   * Production: copy may vary by client or jurisdiction.
+   */
+  cameraPermissionDenied: {
+    heading: 'Camera access blocked',
+    body: 'To take your selfie, allow camera access in your browser settings and reload this page.',
+    reload: 'Reload page',
+  },
+  /** Copy shown inside the validating overlay after auto-capture fires. */
+  validatingLabel: 'Checking quality…',
+  /**
+   * Per-mode labels and placeholder copy.
+   * Used for the stub render when mode !== 'photo', and available for any
+   * future mode indicator shown in the camera header.
+   * Full per-mode header states (allClear, default, etc.) are added when
+   * each mode has real behaviour — adding them now would be speculative.
+   */
+  modes: {
+    photo:  { modeLabel: 'Photo' },
+    video:  { modeLabel: 'Video' },
+    motion: { modeLabel: 'Motion check' },
+  },
+  /** Shown when an optional skip path is available (onSkip prop provided). */
+  skipLabel: 'Skip for now',
 } as const
 
 // ─── Selfie instructions (in-camera overlay) ──────────────────────────────────
@@ -199,6 +297,43 @@ export const liveness = {
     long:  "This quick check confirms a real person is completing the verification — not a photo.",
   },
   trustBadge: 'Encrypted · GDPR compliant · ISO 27001-certified',
+  /**
+   * Per-phase copy for the sub-state machine.
+   * Production: wording and CTA labels may vary by jurisdiction or provider.
+   */
+  phases: {
+    intro: {
+      /** Primary CTA shown on the intro panel before the camera starts. */
+      cta: 'Begin',
+    },
+    align: {
+      /** Instruction badge shown inside the camera frame during alignment. */
+      instruction: 'Look directly at the camera',
+    },
+    motion: {
+      /** Header subtitle shown while the arc is filling. */
+      instruction: 'Hold still and look at the camera',
+    },
+    validating: {
+      /** Label in the spinner overlay after motion completes. */
+      label: 'Checking…',
+    },
+    failed: {
+      heading: "Let's try again",
+      body: "The check wasn't completed. Make sure your face is well lit and centred in the oval.",
+      retryCta: 'Try again',
+      helpCta: 'Get help instead',
+    },
+  },
+  /**
+   * Shown when the browser camera permission is denied or blocked.
+   * Production: copy may vary by client or jurisdiction.
+   */
+  cameraPermissionDenied: {
+    heading: 'Camera access blocked',
+    body: 'To complete the presence check, allow camera access in your browser settings and reload this page.',
+    reload: 'Reload page',
+  },
 } as const
 
 // ─── Processing ───────────────────────────────────────────────────────────────
@@ -228,6 +363,48 @@ export const success = {
   privacyNote:
     "Your information is encrypted and stored securely. It's only used for this verification.",
   cta: 'Continue to app',
+} as const
+
+// ─── Outcome ──────────────────────────────────────────────────────────────────
+
+export const outcome = {
+  verified: {
+    heading: "You're verified",
+    subheading: "All done. You're all set.",
+    metrics: [
+      { label: 'Document', status: 'Verified' },
+      { label: 'Face match', status: 'Confirmed' },
+    ],
+    privacyNote:
+      "Your information is encrypted and stored securely. It's only used for this verification.",
+    cta: 'Continue to app',
+  },
+  pending: {
+    heading: 'Under review',
+    subheading: "We've received everything and our team will take a look.",
+    notice:
+      "Manual review usually takes a few hours. We'll be in touch once a decision has been made.",
+    cta: 'Done for now',
+  },
+  additional_step: {
+    heading: 'One more step',
+    subheading: 'We need a little more information to complete your verification.',
+    notice: "Follow the instructions on the next screen — it should only take a minute.",
+    cta: 'Continue',
+  },
+  retry: {
+    heading: "Let's try again",
+    subheading: "Something didn't go through. We can walk you through it.",
+    cta: 'Try again',
+    secondaryCta: 'Get help instead',
+  },
+  rejected: {
+    heading: "We couldn't verify you",
+    subheading: "Unfortunately, we weren't able to complete your identity check.",
+    notice:
+      "If you think this is a mistake, our support team can help you work through it.",
+    cta: 'Get help',
+  },
 } as const
 
 // ─── Retry ────────────────────────────────────────────────────────────────────
