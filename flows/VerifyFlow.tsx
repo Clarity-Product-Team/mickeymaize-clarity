@@ -98,13 +98,13 @@ export function VerifyFlow() {
     applyScenario,
   } = useVerifyFlow()
 
-  const { dispatch: machineDispatch, welcomeMode, machineState, machineContext } = useVerificationMachine()
-
-  // Flow config — used to drive the country/doc selection screen.
+  // Flow config — used to drive the country/doc selection screen and machine transitions.
   // Future: replaced with the session config returned by startSession().
   const flowConfig = EXAMPLE_LOW_RISK_FLOW
   const docSelectConfig = docSelectConfigFromFlowConfig(flowConfig)
   const livenessRequired = resolveLivenessRequired(flowConfig)
+
+  const { dispatch: machineDispatch, welcomeMode, machineState, machineContext } = useVerificationMachine(flowConfig)
 
   // ── Mock session ───────────────────────────────────────────────────────────
   // Start a mock backend session on mount so uploadDocument() has a valid

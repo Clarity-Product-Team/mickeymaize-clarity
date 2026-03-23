@@ -1,6 +1,8 @@
 import type { VerificationEvent, VerificationEventType } from './events'
 import { TERMINAL_STATES, type VerificationStateName } from './states'
 import type { VerificationContext } from './context'
+import type { VerificationFlowConfig } from '../config/types'
+import { resolveBackSideRequired, resolveLivenessRequired } from '../config/resolvers'
 
 // ─── Result type ──────────────────────────────────────────────────────────────
 
@@ -76,12 +78,11 @@ const STATIC_TRANSITIONS: StaticTable = {
     VALIDATION_FAILED: 'retryable_failure',
   },
   reviewing_document_front: {
-    // Note: in production, CAPTURE_CONFIRMED here should check whether the
-    // document requires a back side and skip to capturing_face if not.
-    // That conditional is left for the context-aware transition layer (future step).
-    CAPTURE_CONFIRMED: 'capturing_document_back',
-    RETAKE:            'capturing_document_front',
-    CANCEL:            'cancelled',
+    // CAPTURE_CONFIRMED is handled conditionally in transition() — it consults
+    // resolveBackSideRequired(config, context.docType) to decide whether to
+    // go to capturing_document_back or skip directly to capturing_face.
+    RETAKE:  'capturing_document_front',
+    CANCEL:  'cancelled',
   },
 
   // ── Document capture — back ─────────────────────────────────────────────────
@@ -113,10 +114,9 @@ const STATIC_TRANSITIONS: StaticTable = {
     CANCEL:             'cancelled',
   },
   validating_face: {
-    // Note: in production, VALIDATION_PASSED here should check whether liveness
-    // is required for this flow and skip to uploading if not.
-    // That conditional is left for the context-aware transition layer (future step).
-    VALIDATION_PASSED: 'capturing_motion',
+    // VALIDATION_PASSED is handled conditionally in transition() — it consults
+    // resolveLivenessRequired(config) to decide whether to go to capturing_motion
+    // or skip directly to uploading.
     VALIDATION_FAILED: 'retryable_failure',
   },
   capturing_motion: {
@@ -249,12 +249,33 @@ export function transition(
   current: VerificationStateName,
   event: VerificationEvent,
   context: VerificationContext,
+  config: VerificationFlowConfig,
 ): TransitionResult | null {
 
   // Terminal states accept no further events.
   if (TERMINAL_STATES.has(current)) return null
 
   // ── Conditional transitions ────────────────────────────────────────────────
+
+  // reviewing_document_front → CAPTURE_CONFIRMED:
+  // Route to back capture only when the selected document requires it.
+  // Falls back to capturing_face for single-sided documents (e.g. passport).
+  if (current === 'reviewing_document_front' && event.type === 'CAPTURE_CONFIRMED') {
+    const nextState = resolveBackSideRequired(config, context.docType)
+      ? 'capturing_document_back'
+      : 'capturing_face'
+    const contextPatch = buildContextPatch(event, nextState, current, context)
+    return { state: nextState, contextPatch }
+  }
+
+  // validating_face → VALIDATION_PASSED:
+  // Route to liveness only when the flow config requires it.
+  // Skips directly to uploading when liveness is not required.
+  if (current === 'validating_face' && event.type === 'VALIDATION_PASSED') {
+    const nextState = resolveLivenessRequired(config) ? 'capturing_motion' : 'uploading'
+    const contextPatch = buildContextPatch(event, nextState, current, context)
+    return { state: nextState, contextPatch }
+  }
 
   // BACKEND_RESULT_RECEIVED: next state is determined by event.outcome.
   if (current === 'awaiting_backend_result' && event.type === 'BACKEND_RESULT_RECEIVED') {

@@ -5,6 +5,7 @@ import { INITIAL_CONTEXT, type VerificationContext } from '@/features/verificati
 import { transition } from '@/features/verification/machine/transitions'
 import { type VerificationStateName } from '@/features/verification/machine/states'
 import { type VerificationEvent } from '@/features/verification/machine/events'
+import type { VerificationFlowConfig } from '@/features/verification/config/types'
 import type { WelcomeMode } from '@/lib/types'
 
 // ─── Machine state shape ───────────────────────────────────────────────────────
@@ -12,23 +13,6 @@ import type { WelcomeMode } from '@/lib/types'
 interface MachineSnapshot {
   state:   VerificationStateName
   context: VerificationContext
-}
-
-// ─── Reducer ──────────────────────────────────────────────────────────────────
-
-function machineReducer(
-  snapshot: MachineSnapshot,
-  event: VerificationEvent,
-): MachineSnapshot {
-  const result = transition(snapshot.state, event, snapshot.context)
-  if (!result) return snapshot
-
-  return {
-    state:   result.state,
-    context: result.contextPatch
-      ? { ...snapshot.context, ...result.contextPatch }
-      : snapshot.context,
-  }
 }
 
 const INITIAL_SNAPSHOT: MachineSnapshot = {
@@ -74,8 +58,20 @@ export interface UseVerificationMachineResult {
   welcomeMode:    WelcomeMode
 }
 
-export function useVerificationMachine(): UseVerificationMachineResult {
-  const [snapshot, dispatch] = useReducer(machineReducer, INITIAL_SNAPSHOT)
+export function useVerificationMachine(config: VerificationFlowConfig): UseVerificationMachineResult {
+  const [snapshot, dispatch] = useReducer(
+    (snapshot: MachineSnapshot, event: VerificationEvent): MachineSnapshot => {
+      const result = transition(snapshot.state, event, snapshot.context, config)
+      if (!result) return snapshot
+      return {
+        state:   result.state,
+        context: result.contextPatch
+          ? { ...snapshot.context, ...result.contextPatch }
+          : snapshot.context,
+      }
+    },
+    INITIAL_SNAPSHOT,
+  )
 
   const stableDispatch = useCallback(
     (event: VerificationEvent) => dispatch(event),
