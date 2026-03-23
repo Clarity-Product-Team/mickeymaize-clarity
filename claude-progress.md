@@ -4,6 +4,7 @@
 Transform the Clarity Verify KYC prototype into a production-aligned identity verification UI — with a typed state machine, flow configuration system, backend service layer, session lifecycle management, complete screen implementations, and full engineering documentation — ready for real provider integration.
 
 ## What We Did
+- **Config-aware machine transitions** (2026-03-23) — fixed the two unconditional transitions in `transitions.ts`; `transition()` now accepts `VerificationFlowConfig` as a 4th argument; `useVerificationMachine` accepts `config` and closes over it in the reducer; `VerifyFlow.tsx` passes `flowConfig`
 - **State machine** — implemented `features/verification/machine/` with 23 states, 19 events, typed `VerificationContext`, and a pure `transition()` function with a static transition table and conditional branches (BACKEND_RESULT_RECEIVED, PERMISSION_GRANTED, RETRY_STEP)
 - **Flow configuration system** — implemented `features/verification/config/` with `VerificationFlowConfig` schema, 4 example configs (passport-only, two-sided, low-risk, high-risk), resolver functions, `validateFlowConfig()`, and `docSelectConfigFromFlowConfig()` adapter
 - **Backend service layer** — implemented `features/verification/services/` with `VerificationService` interface, `ApiResponse<T>` envelope, all request/response types, `BackendSessionStatus` → machine state/event mapping, and a fully functional in-memory mock service
@@ -20,13 +21,12 @@ Transform the Clarity Verify KYC prototype into a production-aligned identity ve
 ## Current State
 - **Working:** Full UI flow runnable at `http://localhost:3000/verify`. All screens implemented. Mock backend wired. State machine transitions correctly. Flow config drives branching. Session start, upload, and polling all functional via mock service.
 - **Working:** TypeScript passes clean (`npx tsc --noEmit` — zero errors).
-- **Partially working:** Two machine transitions are unconditional stubs (see Open Issues). Processing steps and outcome metrics are hardcoded (see Open Issues).
+- **Working:** Machine transitions are now fully config-aware — back capture and liveness routing are driven by `VerificationFlowConfig` via resolver functions.
+- **Partially working:** Processing steps and outcome metrics are still hardcoded (see Open Issues).
 - **Not yet wired:** Real camera capture, real backend, real liveness provider.
-- **Pushed:** Commit `2758b36` on `main`.
+- **Pushed:** Commit `2b43ca4` on `main`.
 
 ## Open Issues
-- `reviewing_document_front → capturing_document_back` is unconditional — should consult `resolveBackSideRequired(config, docType)` and skip to `capturing_face` for single-sided documents
-- `validating_face → capturing_motion` is unconditional — should consult `resolveLivenessRequired(config)` and skip to `uploading` when liveness is not required
 - `ProcessingScreen` step list hardcodes "Comparing your face" regardless of `faceCapture.required` — needs `flowConfig` passed in
 - `OutcomeScreen` metrics hardcode "Face match: Confirmed" regardless of which steps were collected — needs `flowConfig` passed in
 - Camera capture is fully simulated — no real `getUserMedia` or frame extraction
@@ -73,12 +73,10 @@ git push origin main    # push to Clarity-Product-Team/mickeymaize-clarity
 - `OutcomeScreenProps.outcome` made required — the optional default was a silent failure mode; `VerifyFlow.tsx` always passes it
 
 ## Next Step
-Fix the two unconditional machine transitions in `features/verification/machine/transitions.ts` — pass `VerificationFlowConfig` (or resolved booleans) into `transition()` so that `reviewing_document_front → CAPTURE_CONFIRMED` routes correctly based on `backSideRequired`, and `validating_face → VALIDATION_PASSED` routes correctly based on `liveness.required`.
+Fix the two remaining hardcoded content gaps: pass `flowConfig` into `ProcessingScreen` so the step list omits "Comparing your face" when face capture is not required, and pass flow-awareness into `OutcomeScreen` so the verified metrics reflect only the steps that were actually collected.
 
 ## How To Resume Tomorrow
 1. Run `npm run dev` and open `http://localhost:3000/verify` to confirm the flow works.
 2. Run `npx tsc --noEmit` to confirm zero type errors.
-3. Read `docs/handoff.md` for the full picture — it has architecture, screen gaps, remaining mock areas, and ordered next steps.
-4. The two highest-priority code gaps are the unconditional transitions in `features/verification/machine/transitions.ts` (lines ~79-84 for back capture, ~115-121 for liveness). Both have comments marking the gap.
-5. To fix them, `transition()` needs access to resolved booleans from `VerificationFlowConfig` — either pass the config in as a fourth argument, or pre-resolve the booleans and store them in `VerificationContext`.
-6. All code is on `main` at `https://github.com/Clarity-Product-Team/mickeymaize-clarity`.
+3. The machine transition gaps are now fixed. The remaining content gaps are in `screens/ProcessingScreen.tsx` (hardcoded step list) and `screens/OutcomeScreen.tsx` (hardcoded metrics). Both need `flowConfig` passed in from `VerifyFlow.tsx`.
+4. All code is on `main` at `https://github.com/Clarity-Product-Team/mickeymaize-clarity` (latest commit `2b43ca4`).

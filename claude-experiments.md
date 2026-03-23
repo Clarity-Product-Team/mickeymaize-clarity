@@ -73,33 +73,12 @@ None — fixed. Ongoing: outcome screens should never have silent success defaul
 
 **Date:** 2026-03-19
 
-**Description:**
-In `features/verification/machine/transitions.ts`, the `reviewing_document_front` state routes `CAPTURE_CONFIRMED` unconditionally to `capturing_document_back`. For single-sided documents (passport), this is incorrect — the machine should skip back capture and go to `capturing_face`.
+**Work Done:**
+- Fixed 2026-03-23: `transition()` now accepts `VerificationFlowConfig` as 4th argument
+- `CAPTURE_CONFIRMED` from `reviewing_document_front` calls `resolveBackSideRequired(config, context.docType)` — routes to `capturing_document_back` when true, `capturing_face` when false
+- `npx tsc --noEmit` clean after fix
 
-**Steps to Reproduce:**
-1. Run the demo with `EXAMPLE_LOW_RISK_FLOW`
-2. Select "Passport" (single-sided document)
-3. Complete front capture and advance through review
-4. Observe: machine attempts to go to back capture state even though passport has no back side
-
-**Observed Behavior:**
-Machine transitions to `capturing_document_back`. `VerifyFlow.tsx` navigates past it via `useVerifyFlow` screen routing, masking the issue in the current demo.
-
-**Expected Behavior:**
-`CAPTURE_CONFIRMED` from `reviewing_document_front` should call `resolveBackSideRequired(config, docType)` and route to `capturing_face` when false.
-
-**Suspected Cause:**
-The conditional was deferred — the transition function does not currently receive `VerificationFlowConfig`. A comment in `transitions.ts` marks this explicitly.
-
-**Work Done So Far:**
-- Confirmed in `transitions.ts` (line ~79-84)
-- Documented in `docs/handoff.md` and `docs/screen-gaps.md`
-- Comment added in `transitions.ts` marking the gap
-
-**Next Action:**
-Pass `VerificationFlowConfig` (or pre-resolved booleans) into `transition()` and add a conditional branch for this case. See `docs/handoff.md` Step 4 for the recommended fix approach.
-
-**Status:** open
+**Status:** fixed
 
 ---
 
@@ -107,32 +86,11 @@ Pass `VerificationFlowConfig` (or pre-resolved booleans) into `transition()` and
 
 **Date:** 2026-03-19
 
-**Description:**
-In `features/verification/machine/transitions.ts`, the `validating_face` state routes `VALIDATION_PASSED` unconditionally to `capturing_motion` (liveness screen). When `liveness.required` is false in the flow config, the machine should skip liveness and go to `uploading`.
+**Work Done:**
+- Fixed 2026-03-23 (same pass as back-capture fix): `VALIDATION_PASSED` from `validating_face` calls `resolveLivenessRequired(config)` — routes to `capturing_motion` when true, `uploading` when false
+- `npx tsc --noEmit` clean after fix
 
-**Steps to Reproduce:**
-1. Run the demo with `EXAMPLE_LOW_RISK_FLOW` (liveness: `{ required: false }`)
-2. Complete selfie capture
-3. Observe: machine transitions to liveness screen even though liveness is not required
-
-**Observed Behavior:**
-Liveness screen appears regardless of `liveness.required` value in config.
-
-**Expected Behavior:**
-`VALIDATION_PASSED` from `validating_face` should call `resolveLivenessRequired(config)` and route to `uploading` when false.
-
-**Suspected Cause:**
-Same root cause as the back-capture transition gap — `transition()` does not receive `VerificationFlowConfig`. Comment in `transitions.ts` marks the gap explicitly.
-
-**Work Done So Far:**
-- Confirmed in `transitions.ts` (line ~115-121)
-- Documented in `docs/handoff.md` and `docs/screen-gaps.md`
-- Comment added in `transitions.ts` marking the gap
-
-**Next Action:**
-Same fix as the back-capture gap — pass config or resolved booleans into `transition()`. Both gaps should be fixed together in one pass.
-
-**Status:** open
+**Status:** fixed
 
 ---
 

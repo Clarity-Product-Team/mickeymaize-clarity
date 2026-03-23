@@ -146,17 +146,31 @@ Two transitions in `features/verification/machine/transitions.ts` should be cond
 2. `validating_face → VALIDATION_PASSED` always goes to `capturing_motion`, even when `liveness.required` is false
 
 **Decision:**
-Accept both as known gaps for now. Document them with comments in `transitions.ts` and in `docs/handoff.md`. Do not fix them in this session.
+Accepted as known gaps — documented, not fixed in that session.
+
+**Status:** superseded
+
+---
+
+## Decision: Config-Aware Machine Transitions via Fourth Argument to transition()
+
+**Date:** 2026-03-23
+
+**Context:**
+The two deferred transition gaps were ready to fix. Needed to decide how `transition()` gains access to `VerificationFlowConfig`: as a fourth argument, or via pre-resolved booleans stored in `VerificationContext`.
+
+**Decision:**
+Pass `VerificationFlowConfig` as a required fourth argument to `transition()`. The `useVerificationMachine` hook now accepts `config` as a parameter and closes over it inside an inline reducer passed to `useReducer`. `VerifyFlow.tsx` passes `flowConfig` to the hook.
 
 **Alternatives Considered:**
-- Fix immediately by passing `VerificationFlowConfig` as a fourth argument to `transition()`
-- Pre-resolve booleans (`backSideRequired`, `livenessRequired`) into `VerificationContext` so the transition function can read them without needing the config
+- Pre-resolve `backSideRequired` / `livenessRequired` into `VerificationContext` — avoids the extra parameter but conflates session config with session data
+- Store config in a React ref inside the hook and access via closure — works but less explicit
 
 **Reasoning:**
-Fixing requires a design choice about where config knowledge lives in the machine (fourth argument vs. context field). That decision has downstream implications for testing and resumability. Getting it wrong would need to be unwound. The current demo uses `EXAMPLE_LOW_RISK_FLOW` where liveness is off but back capture is on for most docs — both gaps are exercisable but non-critical for the demo. Better to fix deliberately than quickly.
+Passing config explicitly keeps the function signature honest about its dependencies. `VerificationContext` holds session data (artifacts, outcomes, attempts); mixing in static config-derived booleans would muddy that boundary. The inline reducer pattern is idiomatic React for reducers that need external dependencies. Since `config` is stable for the session lifetime, the closure overhead is negligible.
 
 **Implications:**
-In the current demo, the liveness screen always appears after selfie even when `liveness.required: false`. Single-sided document flows (passport) will attempt to go to back capture but `VerifyFlow.tsx` will route past it via `useVerifyFlow` logic. These gaps must be fixed before any real backend integration.
+Any future caller of `transition()` must supply a `VerificationFlowConfig`. When the config comes from the backend (`startSession()` response), it is passed into the hook at mount time and remains constant. The existing resolver functions (`resolveBackSideRequired`, `resolveLivenessRequired`) are the single source of truth for these decisions.
 
 **Status:** active
 
